@@ -95,7 +95,6 @@ def MainMenu():
 
 @route(PREFIX+'/{filter}')
 def Soaps(title2, filter):
-	Log.Debug("--- SOAPS")
 	logged = Login()
 	if logged == 2:
 		return MessageContainer(
@@ -148,16 +147,12 @@ def Soaps(title2, filter):
 
 @route(PREFIX+'/{filter}/{id}', unwatched=bool)
 def show_seasons(id, soap_title, filter, unwatched = False):
-	Log.Debug("--- SEASONS")
 	dir = ObjectContainer(title2 = soap_title)
 	url = API_URL + 'episodes/'+id
 	data = GET(url)
 	season = {}
 	useason = {}
 	s_length = {}
-
-	Log.Debug(str(data))
-	Log.Debug("--- 10")
 
 	covers = dict(
         (int(cover['season']), cover['big'])
@@ -166,8 +161,6 @@ def show_seasons(id, soap_title, filter, unwatched = False):
 
 	if unwatched:
 		for episode in data:
-			Log.Debug(str(episode))
-			Log.Debug(str(episode['season']))
 			if episode['watched'] == None:
 				if int(episode['season']) not in season:
 					season[int(episode['season'])] = episode['season']
@@ -198,16 +191,13 @@ def show_seasons(id, soap_title, filter, unwatched = False):
 
 @route(PREFIX+'/{filter}/{sid}/{season}', allow_sync=True, unwatched=bool)
 def show_episodes(sid, season, filter, soap_title, unwatched = False):
-	Log.Debug("--- EPISODES " + sid)
 	dir = ObjectContainer(title2 = u'%s - %s сезон ' % (soap_title, season))
 	url = API_URL + 'episodes/'+sid
 	data = GET(url)
 	quality = Prefs["quality"]
 	sort = Prefs["sorting"]
 	show_only_hd = False
-	Log('=== ' + quality)
 
-	Log('=== ' + str(data))
 	if quality == "HD":
 		for episode in data:
 			if season == episode['season']:
@@ -215,23 +205,16 @@ def show_episodes(sid, season, filter, soap_title, unwatched = False):
 					show_only_hd = True
 					break
 
-	#if sort != 'да':
-	#	data = reversed(data)
-
 	for row in data['episodes']:
-		Log('=== 10 ' + str(row))
 		if season == row['season']:
-			Log('=== 20')
 			if quality == "HD" and show_only_hd == True and row['quality'] != '720p':
 				continue
 			elif quality == "SD" and show_only_hd == False and row['quality'] != 'SD':
 				continue
 			else:
-				Log('=== 30')
 				if row['watched'] != None and unwatched:
 					continue
 				else:
-					Log('=== 40')
 
 					eid = ''
 					ehash = ''
@@ -260,7 +243,7 @@ def show_episodes(sid, season, filter, soap_title, unwatched = False):
 							+ row['title_ru'].encode('utf-8').replace('&#039;', "'").replace("&amp;", "&").replace('&quot;','"') \
 							+ " (" + name_quality(q).encode('utf-8') + "  " \
 							+ name_translate(translate).encode('utf-8') + ")"
-					poster = "http://covers.s4me.ru/season/big/1.jpg"
+					poster = row['screenshots']['big']
 					summary = row['spoiler']
 					thumb = Function(Thumb, url=poster)
 					parts = [PartObject(key=Callback(episode_url, sid=sid, eid=eid, ehash=ehash, part=0))]
