@@ -15,12 +15,15 @@ TITLE = 'soap4.me'
 ART = 'art.png'
 ICON = 'icon.png'
 BASE_URL = 'http://soap4.me/'
-API_URL = 'http://soap4.me/api/'
-LOGIN_URL = 'http://soap4.me/login/'
-USER_AGENT = 'xbmc for soap'
+OLD_API_URL = 'http://soap4.me/api/'
+API_URL = 'https://api.soap4.me/v2/'
+LOGIN_URL = 'https://api.soap4.me/v2/auth/'
+USER_AGENT = 'soap4.me plex plugin'
 LOGGEDIN = False
 TOKEN = False
 SID = ''
+
+# login : http -v --form POST https://api.soap4.me/v2/auth/ login=<username> password=<password> User-Agent:"soap4.me plex plugin"
 
 def Start():
 	ObjectContainer.art = R(ART)
@@ -58,7 +61,7 @@ def Login():
 			LOGGEDIN = True
 			Dict['sid'] = SID
 			Dict['token'] = TOKEN
-
+			Log.Debug("--- TOKEN: " + TOKEN)
 			return 1
 		else:
 			LOGGEDIN = False
@@ -92,7 +95,7 @@ def MainMenu():
 
 @route(PREFIX+'/{filter}')
 def Soaps(title2, filter):
-
+	Log.Debug("--- SOAPS")
 	logged = Login()
 	if logged == 2:
 		return MessageContainer(
@@ -114,17 +117,25 @@ def Soaps(title2, filter):
 			url = API_URL + 'soap/my/'
 		obj = GET(url)
 
-		obj=sorted(obj, key=lambda k: k['title'])
+		obj=sorted(obj, key=lambda k: k['title_ru'])
 
 		for items in obj:
+			Log.Debug("=== 10" + str(items))
 			if filter == 'unwatched' and items["unwatched"] == None:
 				continue
-			soap_title = items["title"]
+	
+			soap_title = items["title_ru"]
+
 			if filter != 'unwatched':
 				title = soap_title
 			else:
 				title = items["title"]+ " (" +str(items["unwatched"])+ ")"
-			summary = items["description"]
+				
+			if "description" in items:
+				summary = items["description"]
+			else:
+				summary = ""
+
 			poster = 'http://covers.s4me.ru/soap/big/'+items["sid"]+'.jpg'
 			rating = float(items["imdb_rating"])
 			summary = summary.replace('&quot;','"')
@@ -137,7 +148,7 @@ def Soaps(title2, filter):
 
 @route(PREFIX+'/{filter}/{id}', unwatched=bool)
 def show_seasons(id, soap_title, filter, unwatched = False):
-
+	Log.Debug("--- SEASONS")
 	dir = ObjectContainer(title2 = soap_title)
 	url = API_URL + 'episodes/'+id
 	data = GET(url)
@@ -145,80 +156,111 @@ def show_seasons(id, soap_title, filter, unwatched = False):
 	useason = {}
 	s_length = {}
 
-	#Log.Debug(str(data))
+	Log.Debug(str(data))
+	Log.Debug("--- 10")
+
+	covers = dict(
+        (int(cover['season']), cover['big'])
+        for cover in data.get('covers', list())
+    )
 
 	if unwatched:
 		for episode in data:
+			Log.Debug(str(episode))
+			Log.Debug(str(episode['season']))
 			if episode['watched'] == None:
 				if int(episode['season']) not in season:
-					season[int(episode['season'])] = episode['season_id']
+					season[int(episode['season'])] = episode['season']
 				if int(episode['season']) not in useason.keys():
 					useason[int(episode['season'])] = []
 					useason[int(episode['season'])].append(int(episode['episode']))
 				elif int(episode['episode']) not in useason[int(episode['season'])]:
 					useason[int(episode['season'])].append(int(episode['episode']))
 	else:
-		for episode in data:
+		for episode in data['episodes']:
 			if int(episode['season']) not in season:
-				season[int(episode['season'])] = episode['season_id']
+				season[int(episode['season'])] = episode['season']
 				s_length[int(episode['season'])] = [episode['episode'],]
 			else:
 				if episode['episode'] not in s_length[int(episode['season'])]:
 					s_length[int(episode['season'])].append(episode['episode'])
-
 	for row in season:
 		if unwatched:
 			title = "%s сезон (%s)" % (row, len(useason[row]))
 		else:
 			title = "%s сезон" % (row)
 		season_id = str(row)
-		poster = "http://covers.s4me.ru/season/big/%s.jpg" % season[row]
+		poster = covers[row]
 		thumb=Function(Thumb, url=poster)
+
 		dir.add(SeasonObject(key=Callback(show_episodes, sid = id, season = season_id, filter=filter, soap_title=soap_title, unwatched = unwatched), episode_count=len(s_length[row]) if s_length else len(useason[row]), show=soap_title, rating_key=str(row), title = title, thumb = thumb))
 	return dir
 
 @route(PREFIX+'/{filter}/{sid}/{season}', allow_sync=True, unwatched=bool)
 def show_episodes(sid, season, filter, soap_title, unwatched = False):
-
+	Log.Debug("--- EPISODES " + sid)
 	dir = ObjectContainer(title2 = u'%s - %s сезон ' % (soap_title, season))
 	url = API_URL + 'episodes/'+sid
 	data = GET(url)
 	quality = Prefs["quality"]
 	sort = Prefs["sorting"]
 	show_only_hd = False
+	Log('=== ' + quality)
 
+	Log('=== ' + str(data))
 	if quality == "HD":
 		for episode in data:
 			if season == episode['season']:
 				if episode['quality'] == '720p':
 					show_only_hd = True
 					break
-	if sort != 'да':
-		data = reversed(data)
 
-	for row in data:
+	#if sort != 'да':
+	#	data = reversed(data)
+
+	for row in data['episodes']:
+		Log('=== 10 ' + str(row))
 		if season == row['season']:
-
+			Log('=== 20')
 			if quality == "HD" and show_only_hd == True and row['quality'] != '720p':
 				continue
 			elif quality == "SD" and show_only_hd == False and row['quality'] != 'SD':
 				continue
 			else:
+				Log('=== 30')
 				if row['watched'] != None and unwatched:
 					continue
 				else:
-					eid = row["eid"]
-					ehash = row['hash']
-					sid = row['sid']
+					Log('=== 40')
+
+					eid = ''
+					ehash = ''
+					q = 0
+					translate = 0
+
+					files = row['files']
+					files = sorted(files, key=lambda k: k['quality'], reverse=True)
+					Log('=== 41 ' + str(files))
+					for file in files:
+						Log('=== 41.1 ' + file['quality'])
+						Log('=== 41.2 ' + str(get_quality(quality)))
+						Log('=== 41.3 ' + str(get_quality(quality) <= int(file['quality'])))
+						if int(file["quality"]) <= get_quality(quality):
+							eid = file["eid"]
+							ehash = file['hash']
+							q = file['quality']
+							translate = file['translate']
+							break
+
+					row['quality'] = q
 					title = ''
 					if not row['watched'] and not unwatched:
 						title += '* '
-					title += "S" + str(row['season']) \
-							+ "E" + str(row['episode']) + " | " \
-							+ row['quality'].encode('utf-8') + " | " \
-							+ row['translate'].encode('utf-8') + " | " \
-							+ row['title_en'].encode('utf-8').replace('&#039;', "'").replace("&amp;", "&").replace('&quot;','"')
-					poster = "http://covers.s4me.ru/season/big/%s.jpg" % row['season_id']
+					title += str(row['episode']) + " - " \
+							+ row['title_ru'].encode('utf-8').replace('&#039;', "'").replace("&amp;", "&").replace('&quot;','"') \
+							+ " (" + name_quality(q).encode('utf-8') + "  " \
+							+ name_translate(translate).encode('utf-8') + ")"
+					poster = "http://covers.s4me.ru/season/big/1.jpg"
 					summary = row['spoiler']
 					thumb = Function(Thumb, url=poster)
 					parts = [PartObject(key=Callback(episode_url, sid=sid, eid=eid, ehash=ehash, part=0))]
@@ -226,7 +268,7 @@ def show_episodes(sid, season, filter, soap_title, unwatched = False):
 						parts.append(PartObject(key=Callback(episode_url, sid=sid, eid=eid, ehash=ehash, part=1)))
 					dir.add(EpisodeObject(
 						key=Callback(play_episode, sid = sid, eid = eid, ehash = ehash, row=row),
-						rating_key='soap4me' + row["eid"],
+						rating_key='soap4me' + eid,
 						title=title,
 						index=int(row['episode']),
 						thumb=thumb,
@@ -235,16 +277,69 @@ def show_episodes(sid, season, filter, soap_title, unwatched = False):
 					))
 	return dir
 
+def name_quality(quality):
+	Log('+++ 0 ' + str(quality))
+	if int(quality) == 1:
+		Log('+++ 1')
+		return 'SD'
+	elif int(quality) == 2:
+		Log('+++ 2')
+		return '720p'
+	elif int(quality) == 3:
+		Log('+++ 3')
+		return 'FullHD'
+	elif int(quality) == 4:
+		Log('+++ 4')
+		return '4K'
+	else:
+		Log('+++ 5')
+		return 'X3'
+
+def name_translate(translate):
+	if int(translate) == 1:
+		return 'Оригинал'
+	elif int(translate) == 2:
+		return 'Субтитры'
+	elif int(translate) == 3:
+		return 'РусСуб'
+	elif int(translate) == 4:
+		return 'Перевод'
+	else:
+		return ''
+
+def get_quality(quality):
+	if quality == 'SD':
+            return 1
+        elif quality == '720p':
+            return 2
+        elif quality == 'FullHD':
+            return 3
+        elif quality == '4K':
+            return 4
+
+def get_resolution(quality):
+	if int(quality) == 1:
+		return '400'
+	elif int(quality) == 2:
+		return '720'
+	elif int(quality) == 3:
+		return '1080'
+	elif int(quality) == 4:
+		return '2160'
+	else:
+		return '400'
+
 def play_episode(sid, eid, ehash, row, *args, **kwargs):
+	Log.Debug("--- PLAY EPISODE")	
 	oc = ObjectContainer()
 	parts = [PartObject(key=Callback(episode_url, sid=sid, eid=eid, ehash=ehash, part=0))]
 	if Prefs["mark_watched"] == 'да':
 		parts.append(PartObject(key=Callback(episode_url, sid=sid, eid=eid, ehash=ehash, part=1)))
 	oc.add(EpisodeObject(
 		key=Callback(play_episode, sid = sid, eid = eid, ehash = ehash, row=row),
-		rating_key='soap4me' + row["eid"],
+		rating_key='soap4me' + eid,
 		items=[MediaObject(
-			video_resolution = 720 if row['quality'].encode('utf-8')=='720p' else 400,
+			video_resolution = get_resolution(row['quality']).encode('utf-8'),
 			video_codec = VideoCodec.H264,
 			audio_codec = AudioCodec.AAC,
 			container = Container.MP4,
@@ -256,6 +351,7 @@ def play_episode(sid, eid, ehash, row, *args, **kwargs):
 	return oc
 
 def episode_url(sid, eid, ehash, part):
+	Log.Debug("--- EPISODE URL")
 	token = Dict['token']
 	if part == 1:
 		params = {"what": "mark_watched", "eid": eid, "token": token}

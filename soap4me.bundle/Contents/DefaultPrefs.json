@@ -16,8 +16,8 @@
         "id": "quality",
         "type": "text",
         "label": "Предпочитаемое качество",
-        "default": "SD",
-        "values": ["SD","HD","SD+HD"],
+        "default": "FullHD",
+        "values": ["SD","720p","FullHD","4K"],
         "type": "enum"
     },
     {
