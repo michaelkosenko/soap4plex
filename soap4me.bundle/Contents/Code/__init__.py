@@ -61,7 +61,6 @@ def Login():
 			LOGGEDIN = True
 			Dict['sid'] = SID
 			Dict['token'] = TOKEN
-			Log.Debug("--- TOKEN: " + TOKEN)
 			return 1
 		else:
 			LOGGEDIN = False
@@ -119,7 +118,6 @@ def Soaps(title2, filter):
 		obj=sorted(obj, key=lambda k: k['title_ru'])
 
 		for items in obj:
-			Log.Debug("=== 10" + str(items))
 			if filter == 'unwatched' and items["unwatched"] == None:
 				continue
 	
@@ -223,11 +221,7 @@ def show_episodes(sid, season, filter, soap_title, unwatched = False):
 
 					files = row['files']
 					files = sorted(files, key=lambda k: k['quality'], reverse=True)
-					Log('=== 41 ' + str(files))
 					for file in files:
-						Log('=== 41.1 ' + file['quality'])
-						Log('=== 41.2 ' + str(get_quality(quality)))
-						Log('=== 41.3 ' + str(get_quality(quality) <= int(file['quality'])))
 						if int(file["quality"]) <= get_quality(quality):
 							eid = file["eid"]
 							ehash = file['hash']
@@ -261,21 +255,15 @@ def show_episodes(sid, season, filter, soap_title, unwatched = False):
 	return dir
 
 def name_quality(quality):
-	Log('+++ 0 ' + str(quality))
 	if int(quality) == 1:
-		Log('+++ 1')
 		return 'SD'
 	elif int(quality) == 2:
-		Log('+++ 2')
 		return '720p'
 	elif int(quality) == 3:
-		Log('+++ 3')
 		return 'FullHD'
 	elif int(quality) == 4:
-		Log('+++ 4')
 		return '4K'
 	else:
-		Log('+++ 5')
 		return 'X3'
 
 def name_translate(translate):
@@ -342,12 +330,15 @@ def episode_url(sid, eid, ehash, part):
 		return Redirect('https://soap4.me/assets/blank/blank1.mp4')
 
 	myhash = hashlib.md5(str(token)+str(eid)+str(sid)+str(ehash)).hexdigest()
-	params = {"what": "player", "do": "load", "token":token, "eid":eid, "hash":myhash}
 
-	data = JSON.ObjectFromURL("http://soap4.me/callback/", params, headers = {'x-api-token': Dict['token'], 'Cookie': 'PHPSESSID='+Dict['sid']})
-	#Log.Debug('!!!!!!!!!!!!!!!!!! === ' + str(data))
+
+
+	params = {"eid":eid, "hash":myhash}
+	Log('*** ' + str(params))
+	data = JSON.ObjectFromURL("https://api.soap4.me/v2/play/episode/{eid}/".format(eid=eid), params, headers = {'x-api-token': Dict['token'], 'Cookie': 'PHPSESSID='+Dict['sid']})
+	Log('*** ' + str(data))
 	if data["ok"] == 1:
-		return Redirect("http://%s.soap4.me/%s/%s/%s/" % (data['server'], token, eid, myhash))
+		return Redirect(data['stream'])
 
 def GET(url):
 	return JSON.ObjectFromURL(url, headers = {'x-api-token': Dict['token'], 'Cookie': 'PHPSESSID='+Dict['sid']}, cacheTime = 0)
